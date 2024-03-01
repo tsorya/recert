@@ -64,17 +64,23 @@ pub(crate) async fn fix_filesystem_pull_secret(pull_secret: &str, dir: &Path) ->
     }
     // TODO: add verification that config.json as actually pull_secret
     log::info!("setting pull secret in config.json");
-    join_all(file_utils::globvec(dir, "**/config.json")?.into_iter().map(|file_path| {
+    set_filesystem_content(pull_secret, dir, "config.json")?;
+    Ok(())
+}
+
+pub(crate) async fn set_filesystem_content(content: &str, dir: &Path, file_name: &str) -> Result<()> {
+    join_all(file_utils::globvec(dir, format!("**/{}", file_name))?.into_iter().map(|file_path| {
         let config_path = file_path.clone();
-        let pull_secret = pull_secret.to_string();
+        let content = content.to_string();
         tokio::spawn(async move {
             async move {
-                commit_file(file_path, &pull_secret).await.context("writing config.json to disk")?;
-
+                commit_file(file_path, &content)
+                    .await
+                    .context(format!("writing {} to disk ", file_name))?;
                 anyhow::Ok(())
             }
             .await
-            .context(format!("fixing config.json {:?}", config_path))
+            .context(format!("fixing {} {:?}", file_name, config_path))
         })
     }))
     .await
