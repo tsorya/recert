@@ -16,10 +16,23 @@ pub(crate) async fn fix_filesystem_mcs_machine_config_content(pull_secret: &str,
                 let mut config: Value = serde_json::from_str(&contents).context("parsing currentconfig")?;
 
                 override_machineconfig_source(&mut config, pull_secret, "/var/lib/kubelet/config.json")?;
+                override_machineconfig_source(&mut config, pull_secret, "/etc/mco/internal-registry-pull-secret.json")?;
 
                 commit_file(file_path, serde_json::to_string(&config).context("serializing currentconfig")?)
                     .await
                     .context("writing currentconfig to disk")?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn fix_filesystem_internal_registry(pull_secret: &str, file_path: &Path) -> Result<()> {
+    if let Some(file_name) = file_path.file_name() {
+        if let Some(file_name) = file_name.to_str() {
+            if file_name == "internal-registry-pull-secret.json" {
+                commit_file(file_path, &pull_secret).await.context("writing internal-registry-pull-secret.json to disk")?;
             }
         }
     }
@@ -37,7 +50,7 @@ pub(crate) async fn fix_filesystem_currentconfig(pull_secret: &str, dir: &Path) 
                 let mut config: Value = serde_json::from_str(&contents).context("parsing currentconfig")?;
 
                 override_machineconfig_source(&mut config, &pull_secret, "/var/lib/kubelet/config.json")?;
-
+                override_machineconfig_source(&mut config, &pull_secret, "/etc/mco/internal-registry-pull-secret.json")?;
                 commit_file(file_path, serde_json::to_string(&config).context("serializing currentconfig")?)
                     .await
                     .context("writing currentconfig to disk")?;
@@ -64,23 +77,17 @@ pub(crate) async fn fix_filesystem_pull_secret(pull_secret: &str, dir: &Path) ->
     }
     // TODO: add verification that config.json as actually pull_secret
     log::info!("setting pull secret in config.json");
-    set_filesystem_content(pull_secret, dir, "config.json")?;
-    Ok(())
-}
-
-pub(crate) async fn set_filesystem_content(content: &str, dir: &Path, file_name: &str) -> Result<()> {
-    join_all(file_utils::globvec(dir, format!("**/{}", file_name))?.into_iter().map(|file_path| {
+    join_all(file_utils::globvec(dir, "**/config.json")?.into_iter().map(|file_path| {
         let config_path = file_path.clone();
-        let content = content.to_string();
+        let pull_secret = pull_secret.to_string();
         tokio::spawn(async move {
             async move {
-                commit_file(file_path, &content)
-                    .await
-                    .context(format!("writing {} to disk ", file_name))?;
+                commit_file(file_path, &pull_secret).await.context("writing config.json to disk")?;
+
                 anyhow::Ok(())
             }
             .await
-            .context(format!("fixing {} {:?}", file_name, config_path))
+            .context(format!("fixing config.json {:?}", config_path))
         })
     }))
     .await

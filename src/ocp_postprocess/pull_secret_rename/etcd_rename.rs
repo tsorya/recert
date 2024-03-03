@@ -31,6 +31,9 @@ pub(crate) async fn fix_machineconfigs(etcd_client: &Arc<InMemoryK8sEtcd>, pull_
                 override_machineconfig_source(&mut machineconfig, pull_secret, "/var/lib/kubelet/config.json")
                     .context("fixing machineconfig")?;
 
+                override_machineconfig_source(&mut machineconfig, pull_secret, "/etc/mco/internal-registry-pull-secret.json")
+                    .context("fixing machineconfig")?;
+
                 put_etcd_yaml(etcd_client, &k8s_resource_location, machineconfig).await?;
 
                 Ok(())

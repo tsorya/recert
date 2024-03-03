@@ -49,6 +49,10 @@ async fn fix_file_resources(pull_secret: &str, file: &Path) -> Result<(), anyhow
     filesystem_rename::fix_filesystem_mcs_machine_config_content(pull_secret, file)
         .await
         .context("fix filesystem mcs machine config content")?;
+
+    filesystem_rename::fix_filesystem_internal_registry(pull_secret, file)
+               .await
+               .context("fix filesystem internal-registry-pull-secret.json")?;
     Ok(())
 }
 
